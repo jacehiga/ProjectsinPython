@@ -1,0 +1,124 @@
+# File: EnigmaModel.py
+# Name: Jace Higa
+
+from EnigmaView import EnigmaView
+from EnigmaConstants import ROTOR_PERMUTATIONS, REFLECTOR_PERMUTATION
+import string
+
+
+class EnigmaModel:
+
+    def __init__(self):
+        """Creates a new EnigmaModel with no views."""
+        self._views = [ ]
+        alpha = [x for x in string.ascii_uppercase]  ## Loads in alphabets
+        false = [False] * 26  ## Makes each alphabet false unless we press down on it
+        self.keys = {alpha[i]: false[i] for i in range(len(alpha))}  ## Creates a dictionary for the keys that we can comb through for each alphabet
+        self.lamps = {alpha[i]: false[i] for i in range(len(alpha))} ## Creates a dictionary for lamps that we can go through as well
+        self.rotorlist = [EnigmaRotor(ROTOR_PERMUTATIONS[0]), EnigmaRotor(ROTOR_PERMUTATIONS[1]), EnigmaRotor(ROTOR_PERMUTATIONS[2])]  ## List of each Rotor
+      
+
+    def add_view(self, view):
+        """Adds a view to this model."""
+        self._views.append(view)  ## Adds view to the end of a list
+
+    def update(self):
+        """Sends an update request to all the views."""
+        for view in self._views:
+            view.update()  ## Updates new list
+
+    def is_key_down(self, letter):
+        return self.keys[letter]  ## Lights up the key      
+
+    def is_lamp_on(self, letter):
+        return self.lamps[letter]  ## Lights up key with given lamp    
+
+    def key_pressed(self, letter):
+        alpha = string.ascii_uppercase
+        self.keys[letter] = True  ## Basically alerts keys and lamps when we press down and updates enigma as well
+        index = alpha.find(letter)
+        revolution = self.rotorlist[2].advance()  ## Advances the alphabet everytime we click a button
+        if revolution == True:  ## If the fast rotor gets to Z
+            med_rev = self.rotorlist[1].advance()  ## It advances the medium rotor by one alphabet
+            if med_rev == True:  ## If the medium rotor gets to Z
+                slow_rev = self.rotorlist[0].advance()  ## It advances the slow rotor by one alphabet
+        index = apply_permutation(index, permutation = self.rotorlist[2].get_permutation(), offset = self.rotorlist[2].get_offset())  ## Goes through permutation for each rotor and the invert_key does the inverse of the rotor
+        index = apply_permutation(index, permutation = self.rotorlist[1].get_permutation(), offset = self.rotorlist[1].get_offset())
+        index = apply_permutation(index, permutation = self.rotorlist[0].get_permutation(), offset = self.rotorlist[0].get_offset())
+        index = apply_permutation(index, REFLECTOR_PERMUTATION, 0)
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[0].get_permutation()), offset = self.rotorlist[0].get_offset())
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[1].get_permutation()), offset = self.rotorlist[1].get_offset())
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[2].get_permutation()), offset = self.rotorlist[2].get_offset())
+        new_letter = alpha[index]
+        self.lamps[new_letter] = True
+        self.update()
+
+    def key_released(self, letter):
+        alpha = string.ascii_uppercase
+        self.keys[letter] = False  ## Basically alerts keys and lamps when we release key and then updates enigma
+        index = alpha.find(letter)
+        index = apply_permutation(index, permutation = self.rotorlist[2].get_permutation(), offset = self.rotorlist[2].get_offset())  ## Goes through permutation for each rotor and the invert_key does the inverse of the rotor
+        index = apply_permutation(index, permutation = self.rotorlist[1].get_permutation(), offset = self.rotorlist[1].get_offset())
+        index = apply_permutation(index, permutation = self.rotorlist[0].get_permutation(), offset = self.rotorlist[0].get_offset())
+        index = apply_permutation(index, REFLECTOR_PERMUTATION, 0)
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[0].get_permutation()), offset = self.rotorlist[0].get_offset())
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[1].get_permutation()), offset = self.rotorlist[1].get_offset())
+        index = apply_permutation(index, permutation = invert_key(self.rotorlist[2].get_permutation()), offset = self.rotorlist[2].get_offset())
+        new_letter = alpha[index]
+        self.lamps[new_letter] = False
+        self.update()
+
+    def get_rotor_letter(self, index):
+        rotor = self.rotorlist[index]  ## Identifies correct rotor
+        offset = rotor.get_offset()  ## Retrieves current offset of rotor 
+        alpha = [x for x in string.ascii_uppercase]  ## Creates alphabet
+        return alpha[offset]  ## Returns current alphabet in the offset
+         
+    def rotor_clicked(self, index):
+        self.rotorlist[index].advance()  ## Advances rotor alphabet when clicked in alpha order
+        self.update()
+
+
+
+class EnigmaRotor:
+
+    def __init__(self, permutation):  ## When a key is pressed down, this is what rotates the rotor
+        self.offset = 0
+        self.permutation = permutation
+
+    def get_offset(self):
+        return self.offset
+    
+    def get_permutation(self):
+        return self.permutation
+
+    def advance(self):
+        wrap_around = False
+        if self.offset == 25:
+            wrap_around = True
+        self.offset = (self.offset + 1) % 26  ## Makes sure it stays in the value of the 26 alphabets, advances it by 1 alphabet
+        return(wrap_around)
+
+def apply_permutation(index, permutation, offset):
+         shifted_index = (index + offset) % 26  ## Everything is between 0 and 25
+         new_character = ord(permutation[shifted_index])-ord("A") ## A = 0
+         return (new_character+26-offset) % 26  ## Takes new value, subtracts by offset and reverses shifted index to give us a number between 0 and 25 which correlates to A-Z
+
+def invert_key(key):
+    alpha = string.ascii_uppercase
+    newkey = ""
+    for ch in alpha:
+        newkey += alpha[key.find(ch)]
+    return(newkey)
+
+def enigma():
+    """Runs the Enigma simulator."""
+    model = EnigmaModel()
+    view = EnigmaView(model)
+    model.add_view(view)
+
+# Startup code
+
+if __name__ == "__main__":
+    enigma()
+
