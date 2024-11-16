@@ -1,0 +1,383 @@
+# File: AdvGame.py
+# Name: Whitley Stepp and Jace Higa
+
+"""
+This module defines the AdvGame class, which records the information
+necessary to play a game.
+"""
+
+###########################################################################
+# Your job in this assignment is to fill in the definitions of the        #
+# methods listed in this file, along with any helper methods you need.    #
+# Unless you are implementing extensions, you won't need to add new       #
+# public methods (i.e., methods called from other modules), but the       #
+# amount of code you need to add is large enough that decomposing it      #
+# into helper methods will be essential.                                  #
+###########################################################################
+
+from AdvRoom import AdvRoom, read_room
+from tokenscanner import *
+from AdvObject import read_object
+
+class AdvGame:
+
+    def __init__(self, prefix):
+        """Reads the game data from files with the specified prefix."""
+        self.inventory = []                                                 ## Empty list for inventory
+        self._prefix = prefix
+        rooms_text = prefix+"Rooms.txt"                                     ## Reads in the rooms
+        self.rooms = {}  
+        objects_text = prefix+"Objects.txt"                                 ## Reads in the object
+        self.objects = {}
+        synonyms_text = prefix+"Synonyms.txt"
+        self.synonyms = {}
+        with open (rooms_text) as rooms:                                    ## Opens rooms, labels file as rooms
+            finished = False
+            while not finished:                                             ## Continues to read rooms until there is none
+                room = read_room(rooms)
+                if room is None:            
+                    finished = True
+                else:
+                    name = room.get_name()
+                    if len(self.rooms) == 0:
+                        self.rooms["START"] = room                          ## Assigns start to the first room
+                    self.rooms[name] = room                                 ## Allows us to keep track of all the rooms by name
+        with open (objects_text) as objects:
+            finished = False
+            while not finished:                                             ## Reads in all instances of objects until there is none
+                object = read_object(objects)
+                if object is None:
+                    finished = True
+                else:
+                    self.objects[object.get_name()] = object                ## Keeps track of all objects by name
+        for object in self.objects.values():                                ## Loops through all objects that have been stored in objects dictionary  
+            if object.get_initial_location() == "PLAYER":       
+                self.inventory.append(object)                               ## Adds object to inventory if location is set to PLAYER
+            else:
+                correct_room = self.rooms[object.get_initial_location()]    ## Room where object should be placed
+                correct_room.add_object(object)                             ## Adds object to room where it should be
+        with open(synonyms_text) as synonyms:                               ## Opens synonyms, then goes through each line
+            for line in synonyms:
+                short = line.rstrip().split("=")
+                self.synonyms[short[0]] = short[1]                          ## If it seems that one of the short synonyms is called, it will match it to the word (N = North)
+
+            
+            
+
+
+    def get_room(self, name):
+        """Returns the AdvRoom object with the specified name."""
+        return self.rooms[name]
+        
+
+    def run(self):
+        """Plays the adventure game stored in this object."""
+        current = "START"
+        move = True
+        while current != "EXIT":
+            room = self.get_room(current)                                   ## Each question is a room
+            if move == True:
+                if room.has_been_visited():
+                    print(room.get_short_description())                     ## Prints short description of room if it has one
+                else:
+                    for line in room.get_long_description():
+                        print(line)
+                    room.set_visited(True)
+                for object in room.get_contents():
+                    print(f"There is {object.get_description()} here.")     ## If not, prints long description of the room
+            passages = room.get_passages()
+            forced = False                                                  ## Looks in synonyms dict and finds synonym and changes it to other command (N -> North)
+            for p in passages:
+                if p[0] == "FORCED":                                        ## What it does if first word is "FORCED"
+                    forced = True                                           ## If it is "FORCED", sets it to true and assigns it to first_word
+                    first_word = "FORCED"
+                    room.set_visited(False)                                 ## Makes room.set_visited false, which allows us to come back to room later
+            if forced is False:                                             ## If it is not forced, allows user to input commands (N, S, etc.)
+                command = input("> ").strip().upper()
+                scanner = TokenScanner(command)                             ## Processes players inputed command, which will help determine next course of action   
+                scanner.ignore_whitespace()                                 ## Ignores all white space
+                first_word = scanner.nextToken()            
+                if first_word in self.synonyms:
+                    first_word = self.synonyms[first_word]                   ## Command for which room we go (WEST) or command (HELP)
+                words = []
+                while scanner.hasMoreTokens():
+                    words.append(scanner.nextToken())   
+                for i in range(len(words)):                                  ## loops through each index in the words list                                    
+                    if words[i] in self.synonyms:
+                        words[i] = self.synonyms[words[i]]                   ## Checks to see if there are synonyms, implements functions we made for synonyms if there are
+                move = False                                                 ## Finishes command, and continues game
+                if first_word == "QUIT":
+                    quit()                                                   ## Exceutes built in quit command
+                elif first_word == "HELP":
+                    print("\n".join(HELP_TEXT))                              ## Prints out help text at bottom of this .py file
+                elif first_word == "LOOK":                                   ## Provides room description
+                    for line in room.get_long_description():
+                        print(line)
+                elif first_word == "TAKE":                                   ## Takes object
+                    message = "Object not found"                             ## Deafult message
+                    for w in words:
+                        try:
+                            currentobj = self.objects[w]                        ## try searches for an object in user input from self.objects, if no object then except function is run
+                            if currentobj in room.get_contents():               ## Scans room to see if there is an object
+                                self.inventory.append(currentobj)               ## Will add object to inventory and remove it from the room
+                                room.remove_object(currentobj)
+                                message = f"You picked up {currentobj}."
+                                break
+                            else:
+                                message = f"The object {w} is not in the room."
+                        except KeyError:
+                            pass                                                 ## If we try "TAKE" command, but no object is there it prints this
+                    print(message)
+                elif first_word == "DROP":
+                    message = f"Item: {' '.join(words)} does not exist."         ## If the user tries to drop an item does not exist in the game                       ## Deafult message
+                    for w in words:
+                        try:
+                            currentobj = self.objects[w]                        ## try searches for an object in user input from self.objects, if no object then except function is run
+                            if currentobj in self.inventory:                    ## Scans to see if there is the specific object in your inventory
+                                room.add_object(currentobj)
+                                self.inventory.remove(currentobj)
+                                message = f"You dropped {currentobj} from your inventory"
+                                break
+                            else:
+                                message = f"The object {w} is not in your inventory."
+                        except KeyError:
+                            pass                                                 ## If we try "TAKE" command, but no object is there it prints this
+                    print(message)
+                elif first_word == "INVENTORY":
+                    print(f"\nInventory Contents:")                         ## Prints out contents of our inventory
+                    for item in self.inventory:
+                        print(f"{item}")
+                elif first_word in [obj.get_use() for obj in self.inventory]:       ## For each object in objects dictionary we are getting its use word because if the user has the object then they have to use the specific word correlated to the object 
+                    for obj in self.inventory:                              ## Loops through each object to find the one with the correct use word
+                        if obj.get_use() == first_word:
+                            correct_obj = obj
+                    for passage in passages:
+                        if passage[2] == correct_obj.get_name():            ## Checks to see if they are in correct room
+                            passage[2] = None                               ## Permanently unlocks room
+                            print(f"Your {correct_obj.get_name()} got you access to {self.rooms[passage[1]].get_short_description()}.")    ## Says correct object that is associated with correct rooms description    
+                            break
+                    else:
+                        print(f"That won't work here.")
+                #elif first_word == "TELEPORT":                             ## EXTENSION, if uncommented you can teleport to whatever room you would like
+                    #current = second_word
+                else:
+                    next_room = None                                        ## If the user doesn't enter any of these commands, continues game through following code
+                    move = True
+                    next_rooms = []                                                   ## Creates new list for room
+                    for p in passages:                                                ## Goes through each passage
+                        if p[0] == first_word:                                        ## Finds rooms in the same direction as the list (If we start NORTH, finds verything North)
+                            next_rooms.append(p) 
+                    for r in next_rooms:                                              ## Goes through each room in the direction we just looped through
+                        if r[2] == None:                                              ## If there is no required item, we can pass
+                            next_room = r 
+                            break                                                     
+                        elif self.objects[r[2]].get_use() == None and self.objects[r[2]] in self.inventory:      ## If there is a use word for the object, we skip it. Otherwise, we check if it is already in our inventory, if yes pass, if no skip
+                            next_room = r                                             ## If either condition holds, sets next_room to current room then it breaks out of loop
+                            break                 
+                    if next_room is None:                                             
+                        print("I don't understand that response.")                    ## If there is no room that corresponds to what the user entered
+                    else:
+                        current = next_room[1]
+            else:                                                                     ## Similar to code above, but this is what happens if forced is True. It will basically skip room and move to next room, then do same thing as above
+                move = True
+                next_rooms = []                                                       
+                for p in passages:                                                    
+                    if p[0] == "FORCED":                                              
+                        next_rooms.append(p) 
+                for r in next_rooms:                                                 
+                    if r[2] == None or self.objects[r[2]] in self.inventory:         
+                        next_room = r
+                if next_room is None:
+                    next_room = passages.get("*", None)
+                if next_room is None:
+                    print("I don't understand that response.")
+                else:
+                    current = next_room[1]                                            
+                     
+                
+
+# Constants
+
+HELP_TEXT = [
+    "Welcome to Adventure!",
+    "Somewhere nearby is Colossal Cave, where others have found fortunes in",
+    "treasure and gold, though it is rumored that some who enter are never",
+    "seen again.  Magic is said to work in the cave.  I will be your eyes",
+    "and hands.  Direct me with natural English commands; I don't understand",
+    "all of the English language, but I do a pretty good job.",
+    "",
+    "It's important to remember that cave passages turn a lot, and that",
+    "leaving a room to the north does not guarantee entering the next from",
+    "the south, although it often works out that way.  You'd best make",
+    "yourself a map as you go along.",
+    "",
+    "Much of my vocabulary describes places and is used to move you there.",
+    "To move, try words like IN, OUT, EAST, WEST, NORTH, SOUTH, UP, or DOWN.",
+    "I also know about a number of objects hidden within the cave which you",
+    "can TAKE or DROP.  To see what objects you're carrying, say INVENTORY.",
+    "To reprint the detailed description of where you are, say LOOK.  If you",
+    "want to end your adventure, say QUIT."
+]
+
+
+
+#########################################################################
+# Your job in this assignment is to fill in the definitions of the      #
+# methods listed in this file, along with any helper methods you need.  #
+# You won't need to work with this file until Milestone #4.  In my      #
+# solution, none of the milestones required any public methods beyond   #
+# the ones defined in this starter file.                                #
+#########################################################################
+
+class AdvObject:
+
+    def __init__(self, name, description, location, use = None):            ## use is an EXTENSION, used for the keys
+        """Creates an AdvObject from the specified properties."""
+        self._name = name
+        self._description = description
+        self._location = location
+        self._use = use
+
+    def __repr__(self):
+        """Converts part of AdvObject class to a string."""
+        return (f"Name:{self._name}, Description:{self._description}, Location:{self._location}, Use:{self._use}\n")     ## Returns objects name, description, and location on seperate lines. More useful for debugging
+
+    def __str__(self):
+            """Converts an AdvObject to a string."""
+            return (f"{self._description}")
+
+    def get_name(self):
+        """Returns the name of this object."""
+        return self._name
+
+    def get_description(self):
+        """Returns the description of this object."""
+        return self._description
+
+    def get_initial_location(self):
+        """Returns the initial location of this object."""
+        return self._location
+
+    def get_use(self):
+        "EXTENSION for Active Objects"
+        return self._use
+
+def read_object(f):     ## PART OF EXTENSION
+    """Reads the next object from the file, returning None at the end."""
+    object = [None, None, None, None]               ## Default list of a blank object, name, description, location, use
+    line = f.readline().rstrip()                    ## Reads a line, if it is blank we have reached end of a file
+    for i in range(4):                              ## Going through four lines because that will be the longest a line will be if it contains all four atrributes
+        if line == "" and i != 3:                   ## This means we've reached the end of file
+            return None
+        elif not line:                              ## This means we've reached the end of objects
+            break
+        else:
+            object[i] = line                        ## If not blank, we update our list that represents our object
+        line = f.readline().rstrip()                ## Reads a line, if it is blank we have reached end of a file                                    ## Moves us to next line
+    return AdvObject(object[0], object[1], object[2], object[3])              ## Reads in object with its name, description, location, and use
+
+
+
+
+
+
+"""This module is responsible for modeling a single room in Adventure."""
+
+#########################################################################
+# Your job in this assignment is to fill in the definitions of the      #
+# methods listed in this file, along with any helper methods you need.  #
+# The public methods shown in this file are the ones you need for       #
+# Milestone #1.  You will need to add other public methods for later    #
+# milestones, as described in the handout.                              #
+#########################################################################
+
+# Constants
+
+MARKER = "-----"
+
+class AdvRoom:
+
+    def __init__(self, name, shortdesc, longdesc, passages):
+        """Creates a new room with the specified attributes."""
+        self._name = name
+        self._shortdesc = shortdesc
+        self._longdesc = longdesc
+        self._passages = passages
+        self._visited = False
+        self._objects = set()                                 ## Creates a set for the objects
+
+    def get_name(self):
+        """Returns the name of this room.."""
+        return self._name
+
+    def get_short_description(self):
+        """Returns a one-line short description of this room.."""
+        return self._shortdesc
+    
+    def set_visited(self, value):
+        self._visited = value                           ## Assigns the value to self._visited which allows us to track whether the room was visited or not
+
+    def has_been_visited(self):
+        return self._visited                            ## Returns whether the room has been visited 
+
+    def get_long_description(self):
+        """Returns the list of lines describing this room."""
+        return self._longdesc
+
+    def get_passages(self):
+        """Returns a list containing tuples in the form of direction, location, then required item."""
+        return self._passages.copy()
+
+    def add_object(self, object):
+        self._objects.add(object)                       ## Adds object to room
+
+    def remove_object(self, object):
+        self._objects.remove(object)                    ## Removes object from room
+
+    def contains_object(self):
+        return object in self._objects                  ## Will return true if object is present and false if it isn't
+        
+    def get_contents(self):
+        return self._objects                            ## Return the collection of objects
+
+    def __repr__(self):
+        return (f"Name:{self._name},Passages: {self._passages}")
+
+
+# Method to read a room from a file
+
+def read_room(f):
+    """Reads the next room from the file, returning None at the end."""
+    name = f.readline().rstrip()                        ## Read the rooms name
+    if name == "":                                      ## Returning None at the end
+        return None
+    shortdesc = f.readline().rstrip()                   ## Read the short description text
+    longdesc = [ ]                                      ## Read the long description text
+    finished = False
+    while not finished:
+        line = f.readline().rstrip()
+        if line == MARKER:
+            finished = True
+        else:
+            longdesc.append(line)
+    passages = [ ]                                      ## Creates a dictionary for passages
+    finished = False
+    while not finished:
+        line = f.readline().rstrip()
+        if line == "":
+            finished = True
+        else:
+            colon = line.find(":")
+            if colon == -1:
+                raise ValueError("Missing colon in " + line)
+            direction = line[:colon].strip().upper()            ## Stores the value to the right of the colon, which is the direction needed in order to enter room (NORTH, EAST, ETC.)
+            rightside = line[colon + 1:].strip().split("/")     ## Takes the stuff on the right side of the colon (Could be two things, location and key so we must differentiate)
+            location = rightside[0]                             ## Checks for the location, which all lines have, not all lines have keys though
+            if len(rightside) > 1:                              ## Checks for the key 
+                key = rightside[1]
+            else:
+                key = None
+            passages.append([direction, location, key])        ## Adds the tuple of direction, location, and keys to the passages list
+    return AdvRoom(name, shortdesc, longdesc, passages)        ## Return the completed object
+
+## Populates the dictionary with name, the short description, long description, and passages that come with each room
