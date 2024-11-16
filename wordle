@@ -1,0 +1,104 @@
+# File: Wordle.py
+# Name: Jace Higa
+
+from WordleGraphics import WordleGWindow, N_ROWS, N_COLS, UNKNOWN_COLOR
+from WordleGraphics import CORRECT_COLOR, PRESENT_COLOR, MISSING_COLOR
+from english import ENGLISH_WORDS, is_english_word, CAPITAL_ENGLISH_WORDS
+import random
+
+## Milestone 1
+def wordle():
+    gw = WordleGWindow()
+
+    bl = []
+    for i in CAPITAL_ENGLISH_WORDS:
+        if len(i) == 5:
+            bl.append(i)
+    word = random.choice(bl)
+    print(word)
+
+    #gw.set_square_letter(0, 0, word[0])
+    #gw.set_square_letter(0, 1, word[1])
+    #gw.set_square_letter(0, 2, word[2])
+    #gw.set_square_letter(0, 3, word[3])
+    #gw.set_square_letter(0, 4, word[4])
+
+
+## Milestone 2
+    def enter_action():
+        """What should happen when the RETURN or ENTER key is pressed."""
+        guess = ""
+        for i in range(N_COLS):
+            L1 = gw.get_square_letter(gw.get_current_row(), i)
+            guess = guess + L1
+        if guess in bl:
+            gw.show_message(guess, color = "white")
+            color_boxes(guess, word)
+        else:
+            gw.show_message("Not in word list", color = "white")
+
+
+
+## Milestone 3
+    def color_boxes(guess, word):
+        al = list(word) ## available letters
+        ycounter = [0]*5
+        answer_counter = []
+        row = gw.get_current_row()
+        for i in al:
+            answer_counter += [al.count(i)]
+        print(answer_counter)
+        for col in range(N_COLS):
+            if guess[col] == word[col]:
+                gw.set_square_color(row, col, color = CORRECT_COLOR)
+                color_key(guess[col], CORRECT_COLOR)
+                al[col] = ''
+            else:
+                gw.set_square_color(row, col, color = MISSING_COLOR)
+                color_key(guess[col], MISSING_COLOR)
+        for col in range(N_COLS):
+            if guess[col] in al and al[col] != "*" and ycounter[al.index(guess[col])] < answer_counter[al.index(guess[col])]:
+                gw.set_square_color(gw.get_current_row(), col, color = PRESENT_COLOR)
+                color_key(guess[col], PRESENT_COLOR)
+                index = al.index(guess[col])
+                ycounter[index] += 1
+                print(ycounter)
+            
+
+            
+
+## Milestone 4 
+    def color_key(letter, color): #green should take precedence
+        if((color == PRESENT_COLOR or color == MISSING_COLOR) and gw.get_key_color(letter) == CORRECT_COLOR):
+            return
+        gw.set_key_color(letter, color)
+
+
+    def move_next_row():
+        guess = ""
+        for i in range(len(word)):
+            guess += str(gw.get_square_letter(gw.get_current_row(), i))
+        if guess not in bl:
+            return
+        elif guess == word:
+            gw.show_message("Winner", color = "White")
+        elif gw.get_current_row() >= N_ROWS - 1:
+            gw.show_message(f"Loser, the answer was {word}", color = "White")
+        else:
+            gw.set_current_row(gw.get_current_row() + 1)
+
+
+    def letter_count(word):
+        counts = {}
+        for i in word:
+            counts[i] = word.count(i)
+        return counts
+    gw.show_message("Welcome to Wordle!", color = "White")
+    gw.add_enter_listener(enter_action)
+    gw.add_enter_listener(move_next_row)
+
+
+ 
+if __name__ == "__main__":
+    wordle()
+
